@@ -13,6 +13,7 @@ interface AssetsListProps {
   onAddClick?: () => void;
   onEditClick?: (asset: Asset) => void;
   onDeleteClick?: (asset: Asset) => void;
+  onViewClick?: (asset: Asset) => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -23,7 +24,9 @@ const statusColors: Record<string, string> = {
   repair: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
 };
 
-export function AssetsList({ assets, onAddClick, onEditClick, onDeleteClick }: AssetsListProps) {
+export function AssetsList({ assets, onAddClick, onViewClick,
+onEditClick,
+onDeleteClick, }: AssetsListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
@@ -116,7 +119,7 @@ const categories = ['all', ...Array.from(new Set(assets.map((a) => a.asset_type)
                           size="sm"
                           variant="ghost"
                           className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
-                          onClick={() => onEditClick?.(asset)}
+                          onClick={() => onViewClick?.(asset)}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
