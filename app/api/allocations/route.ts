@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
         employee:employees(name, employee_id, department)
       `
       )
-      .order('allocation_date', { ascending: false })
+     .order('created_at', { ascending: false })
 
     if (status) {
       query = query.eq('allocation_status', status)

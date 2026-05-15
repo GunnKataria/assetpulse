@@ -15,19 +15,62 @@ const supabase = createClient(cleanUrl, supabaseServiceKey)
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
+
     const body = await request.json()
+
+    const { allocation_status } = body
+
+    const { data: allocation, error: fetchError } =
+      await supabase
+        .from('asset_allocations')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+    if (fetchError || !allocation) {
+      return NextResponse.json(
+        { error: 'Allocation not found' },
+        { status: 404 }
+      )
+    }
+
+    const updatePayload: any = {
+      ...body,
+    }
+
+    if (allocation_status === 'returned') {
+      updatePayload.return_date = new Date()
+        .toISOString()
+        .split('T')[0]
+    }
 
     const { data, error } = await supabase
       .from('asset_allocations')
-      .update(body)
-      .eq('id', params.id)
+      .update(updatePayload)
+      .eq('id', id)
       .select()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      )
+    }
+
+    if (
+      allocation_status === 'returned' &&
+      allocation.asset_id
+    ) {
+      await supabase
+        .from('assets')
+        .update({
+          asset_status: 'in_stock',
+        })
+        .eq('id', allocation.asset_id)
     }
 
     return NextResponse.json(data[0])
@@ -38,7 +81,6 @@ export async function PUT(
     )
   }
 }
-
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }

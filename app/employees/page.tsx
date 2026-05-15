@@ -20,7 +20,7 @@ export default function EmployeesPage() {
   );
 
   const getUserAllocations = (userId: string) => {
-    return mockAllocations.filter((a) => a.employeeId === userId);
+    return mockAllocations.filter((a) => a.employee_id === userId);
   };
 
   const roleColors: Record<string, string> = {
@@ -84,7 +84,7 @@ export default function EmployeesPage() {
                           <div>
                             <p className="text-muted-foreground">Member Since</p>
                             <p className="text-foreground font-medium">
-                              {new Date(emp.createdAt).toLocaleDateString()}
+                            {new Date(emp.createdAt).toISOString().split('T')[0]}
                             </p>
                           </div>
                         </div>

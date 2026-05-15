@@ -6,38 +6,142 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { mockAllocations, mockAssets } from '@/lib/mock-data';
-import { Allocation } from '@/lib/types';
+import { useAssets, useAllocations, useEmployees } from '@/lib/hooks/use-api';
+import axios from 'axios';
 import { Plus, Search, X, CheckCircle, Clock, RotateCw } from 'lucide-react';
 
 export default function AllocationsPage() {
-  const [allocations, setAllocations] = useState<Allocation[]>(mockAllocations);
+  const { allocations, mutate } = useAllocations();
+  const {
+    assets,
+    mutate: mutateAssets,
+  } = useAssets();
+  const { employees } = useEmployees();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
-  const [selectedAllocation, setSelectedAllocation] = useState<Allocation | null>(null);
-  const user = { name: 'John Admin', email: 'admin@company.com', role: 'Administrator' };
+  const [editingAllocation, setEditingAllocation] = useState<any>(null)
 
-  const filteredAllocations = allocations.filter((alloc) => {
-    const matchesSearch =
-      alloc.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      alloc.assetId.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = selectedStatus === 'all' || alloc.status === selectedStatus;
-    return matchesSearch && matchesStatus;
+  const user = { name: 'John Admin', email: 'admin@company.com', role: 'Administrator' };
+  const [formData, setFormData] = useState({
+    employee_id: '',
+    asset_id: '',
+    allocation_date: new Date()
+      .toISOString()
+      .split('T')[0],
+    expected_return_date: '',
+    asset_condition_at_allocation: 'Good',
+    accessories_included: '',
+    notes: '',
   });
+  const filteredAllocations = allocations.filter((alloc: any) => {
+    const matchesSearch =
+      alloc.employee?.name
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      alloc.asset?.asset_id
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase())
+
+    const matchesStatus =
+      selectedStatus === 'all' ||
+      alloc.allocation_status === selectedStatus
+
+    return matchesSearch && matchesStatus
+  })
 
   const handleNewAllocation = () => {
-    setSelectedAllocation(null);
+
     setShowModal(true);
   };
+  const handleEditAllocation = (allocation: any) => {
+    setEditingAllocation(allocation)
 
-  const handleReturnAsset = (allocation: Allocation) => {
-    setAllocations(
-      allocations.map((a) =>
-        a.id === allocation.id ? { ...a, status: 'returned' as const } : a
+    setFormData({
+      employee_id: allocation.employee_id,
+      asset_id: allocation.asset_id,
+      allocation_date: allocation.allocation_date || '',
+      expected_return_date:
+        allocation.expected_return_date || '',
+      asset_condition_at_allocation:
+        allocation.asset_condition_at_allocation || 'Good',
+      accessories_included:
+        allocation.accessories_included || '',
+      notes: allocation.notes || '',
+    })
+
+    setShowModal(true)
+  }
+  const handleReturnAsset = async (allocation: any) => {
+    try {
+      await axios.put(`/api/allocations/${allocation.id}`, {
+        allocation_status: 'returned',
+      })
+
+      mutate()
+      mutateAssets()
+    } catch (error) {
+      alert('Failed to return asset')
+    }
+  }
+  const handleAllocateAsset = async () => {
+    try {
+      const employee = employees.find(
+        (e: any) => e.id === formData.employee_id
       )
-    );
-  };
+
+      const asset = assets.find(
+        (a: any) => a.id === formData.asset_id
+      )
+
+      if (!employee || !asset) {
+        alert('Please select employee and asset')
+        return
+      }
+
+      const payload = {
+        employee_id: formData.employee_id,
+        asset_id: formData.asset_id,
+        allocation_date: formData.allocation_date,
+        expected_return_date:
+          formData.expected_return_date || null,
+        asset_condition_at_allocation:
+          formData.asset_condition_at_allocation,
+        accessories_included:
+          formData.accessories_included || null,
+        notes: formData.notes || null,
+        allocation_status: 'active',
+      }
+
+      if (editingAllocation) {
+        await axios.put(
+          `/api/allocations/${editingAllocation.id}`,
+          payload
+        )
+      } else {
+        await axios.post('/api/allocations', payload)
+      }
+      mutate()
+      mutateAssets()
+
+
+      setShowModal(false)
+
+      setFormData({
+        employee_id: '',
+        asset_id: '',
+        allocation_date: new Date()
+          .toISOString()
+          .split('T')[0],
+        expected_return_date: '',
+        asset_condition_at_allocation: 'Good',
+        accessories_included: '',
+        notes: '',
+      })
+    } catch (error) {
+      alert('Failed to allocate asset')
+    }
+  }
 
   const statusIcons: Record<string, any> = {
     active: CheckCircle,
@@ -73,7 +177,7 @@ export default function AllocationsPage() {
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Active Allocations</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {allocations.filter((a) => a.status === 'active').length}
+                  {allocations.filter((a: any) => a.allocation_status === 'active').length}
                 </p>
               </div>
             </CardContent>
@@ -83,7 +187,7 @@ export default function AllocationsPage() {
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Pending Returns</p>
                 <p className="text-2xl font-bold text-yellow-400">
-                  {allocations.filter((a) => a.status === 'pending_return').length}
+                  {allocations.filter((a: any) => a.allocation_status === 'pending_return').length}
                 </p>
               </div>
             </CardContent>
@@ -93,7 +197,7 @@ export default function AllocationsPage() {
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Returned</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {allocations.filter((a) => a.status === 'returned').length}
+                  {allocations.filter((a: any) => a.allocation_status === 'returned').length}
                 </p>
               </div>
             </CardContent>
@@ -118,11 +222,10 @@ export default function AllocationsPage() {
                 variant={selectedStatus === status ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setSelectedStatus(status)}
-                className={`whitespace-nowrap ${
-                  selectedStatus === status
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-secondary border-border text-foreground hover:bg-secondary'
-                }`}
+                className={`whitespace-nowrap ${selectedStatus === status
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-secondary border-border text-foreground hover:bg-secondary'
+                  }`}
               >
                 {status === 'all' ? 'All' : status.replace('_', ' ').charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
               </Button>
@@ -133,33 +236,36 @@ export default function AllocationsPage() {
         {/* Allocations List */}
         <div className="space-y-3">
           {filteredAllocations.length > 0 ? (
-            filteredAllocations.map((allocation) => {
-              const asset = mockAssets.find((a) => a.id === allocation.assetId);
-              const Icon = statusIcons[allocation.status];
+            filteredAllocations.map((allocation: any) => {
+              const asset = allocation.asset;
+              const Icon =
+                statusIcons[
+                allocation.allocation_status as keyof typeof statusIcons
+                ];
               return (
                 <Card key={allocation.id} className="bg-card border-border hover:border-primary transition-all">
                   <CardContent className="pt-6">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold text-foreground">{allocation.employeeName}</h3>
-                          <Badge className={statusColors[allocation.status]}>
+                          <h3 className="text-lg font-semibold text-foreground">{allocation.employee?.name}</h3>
+                          <Badge className={statusColors[allocation.allocation_status]}>
                             <Icon className="h-3 w-3 mr-1" />
-                            {allocation.status.replace('_', ' ')}
+                            {allocation.allocation_status.replace('_', ' ')}
                           </Badge>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                           <div>
                             <p className="text-muted-foreground">Asset</p>
-                            <p className="text-foreground font-medium">{asset?.name || 'Unknown'}</p>
+                            <p className="text-foreground font-medium">{asset?.asset_id || 'Unknown'}</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground">Department</p>
-                            <p className="text-foreground font-medium">{allocation.department}</p>
+                            <p className="text-foreground font-medium">{allocation.employee?.department}</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground">Allocated Date</p>
-                            <p className="text-foreground">{new Date(allocation.allocatedDate).toLocaleDateString()}</p>
+                            <p className="text-foreground">{new Date(allocation.allocation_date).toLocaleDateString()}</p>
                           </div>
                           {allocation.dueReturnDate && (
                             <div>
@@ -173,7 +279,7 @@ export default function AllocationsPage() {
                         )}
                       </div>
                       <div className="flex gap-2">
-                        {allocation.status === 'active' && (
+                        {allocation.allocation_status === 'active' && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -186,6 +292,7 @@ export default function AllocationsPage() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          onClick={() => handleEditAllocation(allocation)}
                           className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
                         >
                           ✎
@@ -210,11 +317,16 @@ export default function AllocationsPage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <Card className="w-full max-w-2xl bg-card border-border">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b border-border">
-                <CardTitle className="text-foreground">New Asset Allocation</CardTitle>
+                <CardTitle className="text-foreground">{editingAllocation
+                  ? 'Edit Allocation'
+                  : 'New Asset Allocation'}</CardTitle>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowModal(false)
+                    setEditingAllocation(null)
+                  }}
                   className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-4 w-4" />
@@ -224,43 +336,159 @@ export default function AllocationsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-foreground">Employee Name *</label>
-                    <Input placeholder="Select employee" className="bg-secondary border-border text-foreground mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground">Asset *</label>
-                    <select className="w-full px-3 py-2 bg-secondary border border-border rounded-md text-foreground text-sm mt-1">
-                      <option>Select an asset</option>
-                      {mockAssets.filter((a) => a.status === 'available').map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
+                    <select
+                      value={formData.employee_id}
+                      disabled={!!editingAllocation}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          employee_id: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 bg-secondary border border-border rounded-md text-foreground text-sm mt-1"
+                    >
+                      <option value="">Select employee</option>
+
+                      {employees.map((employee: any) => (
+                        <option key={employee.id} value={employee.id}>
+                          {employee.name}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div>
+                    <label className="text-sm font-medium text-foreground">Asset *</label>
+                    <select
+                      value={formData.asset_id}
+                      disabled={!!editingAllocation}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          asset_id: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 bg-secondary border border-border rounded-md text-foreground text-sm mt-1"
+                    >
+                      <option>Select an asset</option>
+                      {assets
+                        .filter((a: any) =>
+                          a.asset_status === 'in_stock' ||
+                          a.id === formData.asset_id
+                        )
+                        .map((a: any) => (
+                          <option key={a.id} value={a.id}>
+                            {a.asset_id} - {a.brand}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  {/* <div>
                     <label className="text-sm font-medium text-foreground">Department *</label>
                     <Input placeholder="Department" className="bg-secondary border-border text-foreground mt-1" />
+                  </div> */}
+                  <div>
+                    <label className="text-sm font-medium text-foreground">
+                      Allocation Date
+                    </label>
+
+                    <Input
+                      type="date"
+                      value={formData.allocation_date}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          allocation_date: e.target.value,
+                        })
+                      }
+                      className="bg-secondary border-border text-foreground mt-1"
+                    />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground">Due Return Date</label>
-                    <Input type="date" className="bg-secondary border-border text-foreground mt-1" />
+                    <label className="text-sm font-medium text-foreground">
+                      Expected Return Date
+                    </label>
+
+                    <Input
+                      type="date"
+                      value={formData.expected_return_date}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          expected_return_date: e.target.value,
+                        })
+                      }
+                      className="bg-secondary border-border text-foreground mt-1"
+                    />
                   </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground">
+                      Asset Condition
+                    </label>
+
+                    <select
+                      value={formData.asset_condition_at_allocation}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          asset_condition_at_allocation: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 bg-secondary border border-border rounded-md text-foreground text-sm mt-1"
+                    >
+                      <option value="Excellent">Excellent</option>
+                      <option value="Good">Good</option>
+                      <option value="Fair">Fair</option>
+                      <option value="Damaged">Damaged</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">
+                    Accessories Included
+                  </label>
+
+                  <Input
+                    placeholder="Charger, Mouse, Laptop Bag..."
+                    value={formData.accessories_included}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        accessories_included: e.target.value,
+                      })
+                    }
+                    className="bg-secondary border-border text-foreground mt-1"
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground">Notes</label>
                   <textarea
                     placeholder="Allocation notes..."
+                    value={formData.notes}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        notes: e.target.value,
+                      })
+                    }
                     className="w-full px-3 py-2 bg-secondary border border-border rounded-md text-foreground text-sm mt-1 resize-none"
                     rows={3}
                   />
                 </div>
                 <div className="flex gap-2 pt-4 border-t border-border">
-                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground flex-1">
-                    Allocate Asset
+                  <Button
+                    onClick={handleAllocateAsset}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground flex-1"
+                  >
+                    {editingAllocation
+                      ? 'Update Allocation'
+                      : 'Allocate Asset'}
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => setShowModal(false)}
+                    onClick={() => {
+                      setShowModal(false)
+                      setEditingAllocation(null)
+                    }}
                     className="flex-1 border-border text-foreground hover:bg-secondary"
                   >
                     Cancel
